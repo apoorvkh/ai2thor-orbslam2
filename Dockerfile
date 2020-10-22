@@ -12,7 +12,7 @@ RUN apt install unzip libgtk2.0-dev libavcodec-dev libavformat-dev libswscale-de
     wget https://github.com/opencv/opencv/archive/3.4.12.zip && unzip 3.4.12.zip && \
     cd opencv-3.4.12 && \
     mkdir build && cd build && \
-    cmake -D CMAKE_BUILD_TYPE=Release .. && make -j8 && make install && \
+    cmake -D CMAKE_BUILD_TYPE=Release .. && make -j"$(nproc)" && make install && \
     cd ../.. && \
     rm -rf 3.4.12.zip opencv-3.4.12
 

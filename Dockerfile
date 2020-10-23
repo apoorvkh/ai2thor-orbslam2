@@ -27,3 +27,5 @@ RUN git clone https://github.com/apoorvkh/ORB_SLAM2.git && \
     cd ORB_SLAM2 && \
     chmod +x build.sh && .\build.sh && \
     cd ..
+
+COPY ai2thor_orbslam2.py /app

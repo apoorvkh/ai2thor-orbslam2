@@ -31,7 +31,7 @@ RUN git clone https://github.com/apoorvkh/ORB_SLAM2.git && \
     cd ..
 
 RUN pip3 install cython && apt-get remove python3-apt && apt-get install python3-apt
-
 ENV LD_LIBRARY_PATH "/usr/local/lib:${LD_LIBRARY_PATH}"
-
 RUN cd /app/ORB_SLAM2 && python3 setup.py build_ext --inplace
+
+COPY ai2thor_orbslam2.py /app

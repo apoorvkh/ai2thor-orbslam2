@@ -5,7 +5,7 @@ import random
 
 if __name__ == '__main__':
     startx()
-    controller = ORBSLAM2Controller(scene='FloorPlan28', gridSize=0.0$
+    controller = ORBSLAM2Controller(scene='FloorPlan28', gridSize=0.05)
     for _ in range(1000):
         rval = random.randint(0, 5)
         if rval == 0:
@@ -21,4 +21,3 @@ if __name__ == '__main__':
         elif rval == 5:
             controller.step(action='RotateLeft', degrees=2.0)
     controller.stop()
-    

@@ -25,13 +25,15 @@ RUN wget https://gitlab.com/libeigen/eigen/-/archive/3.3.8/eigen-3.3.8.zip && un
     cd ../.. && \
     rm -rf eigen-3.3.8.zip eigen-3.3.8
 
-RUN pip3 install cython && apt-get remove python3-apt && apt-get install python3-apt
-ENV LD_LIBRARY_PATH "/usr/local/lib:${LD_LIBRARY_PATH}"
+RUN pip3 install Cython && apt-get remove python3-apt && apt-get install python3-apt libcanberra-gtk*
+ENV LD_LIBRARY_PATH "/app/ORB_SLAM2/lib:/usr/local/lib:${LD_LIBRARY_PATH}"
 
-COPY ./ORB_SLAM2/ /app/ORB_SLAM2/
-RUN cd ORB_SLAM2 && \
+RUN git clone https://github.com/apoorvkh/ORB_SLAM2.git && cd ORB_SLAM2 && \
     chmod +x build.sh && ./build.sh && \
     python3 setup.py build_ext --inplace && \
     cd ..
 
+ENV PYTHONPATH "/app/ORB_SLAM2:/app/ai2thor_docker:${PYTHONPATH}"
+
 COPY ai2thor_orbslam2.py /app
+COPY example_agent.py /app

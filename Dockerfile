@@ -37,3 +37,4 @@ ENV PYTHONPATH "/app/ORB_SLAM2:/app/ai2thor_docker:${PYTHONPATH}"
 
 COPY ai2thor_orbslam2.py /app
 COPY example_agent.py /app
+COPY dijkstra.py /app

@@ -1,30 +1,47 @@
 import os
-from os.path import join
-from ai2thor.controller import Controller
-import cv2
-import subprocess
-import orbslam2
 from time import time
+from ai2thor.controller import Controller
+import orbslam2
+import matplotlib.pyplot as plt
+
 
 class ORBSLAM2Controller(Controller):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, vocab_file, settings_file, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.slam_system = orbslam2.SLAM(b'/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', b'/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml')
-        self.start_time = None
+        self.slam_system = orbslam2.SLAM(vocab_file, settings_file, 'monocular')
         self.frame_counter = 0
+        self.time_elapsed = 0.0
+        self.gt_trajectory = []
 
     def step(self, *args, **kwargs):
+        start = time()
         event = super().step(*args, **kwargs)
-        try:
-            self.slam_system.track_monocular(event.frame, 0)
-            if self.start_time is None:
-                self.start_time = time()
+        if hasattr(self, 'slam_system'):
+            pose = self.slam_system.track(event.frame)
             self.frame_counter += 1
-        except AttributeError:
-            pass
+            self.time_elapsed += time() - start
+        if 'action' in kwargs and kwargs['action'].startswith('Move'):
+            self.gt_trajectory.append((event.metadata['agent']['position']['x'], event.metadata['agent']['position']['z']))
         return event
 
-    def stop(self, *args, **kwargs):
+    def stop(self, keyframe_traj, traj_plot, *args, **kwargs):
         super().stop(*args, **kwargs)
         self.slam_system.shutdown()
-        self.fps = self.frame_counter / (time() - self.start_time)
+        self.slam_system.save_keyframe_trajectory(keyframe_traj)
+
+        with open(keyframe_traj, 'r') as rf:
+            keyframes = rf.readlines()
+            keyframes = list(zip(*[kf.split()[1:4] for kf in keyframes]))
+            kf_x = list(map(float, keyframes[0]))
+            kf_z = list(map(float, keyframes[2]))
+
+        plt.scatter(kf_x, kf_z)
+        plt.savefig(traj_plot)
+        plt.clf()
+
+        gt_camera_x, gt_camera_z = list(zip(*self.gt_trajectory))
+        plt.scatter(gt_camera_x, gt_camera_z)
+        plt.savefig('gt_traj.png')
+
+    def fps(self):
+        return self.frame_counter / self.time_elapsed

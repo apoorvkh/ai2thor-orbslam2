@@ -9,8 +9,8 @@ from ai2thor_orbslam2 import ORBSLAM2Controller
 startx()
 
 gridSize = 0.05
-rotateStepDegrees = 1.0
-controller = ORBSLAM2Controller(scene='FloorPlan28', gridSize=gridSize, snapToGrid=False)
+rotateStepDegrees = 2.0
+controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', '/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False)
 
 def dist(p1, p2):
     return ((p1['x'] - p2['x']) ** 2 + (p1['z'] - p2['z']) ** 2) ** 0.5
@@ -98,11 +98,11 @@ def random_shortest_path(controller):
 
     path = controller.step(action="GetShortestPathToPoint", position=src, x=dst['x'], y=dst['y'], z=dst['z']).metadata['actionReturn']['corners']
 
-    follow_path(src, src_rot, path)
+    follow_path(src, src_rot, path[: int(0.5 * len(path)) ])
 
 
 random_walk(controller)
 
-controller.stop()
+controller.stop('keyframes.txt', 'orbslam_traj.png')
 
-print('FPS', controller.fps)
+print('FPS', controller.fps())

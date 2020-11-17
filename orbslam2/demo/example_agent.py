@@ -10,7 +10,7 @@ startx()
 
 gridSize = 0.05
 rotateStepDegrees = 2.0
-controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', '/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False)
+controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', '/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
 
 def dist(p1, p2):
     return ((p1['x'] - p2['x']) ** 2 + (p1['z'] - p2['z']) ** 2) ** 0.5

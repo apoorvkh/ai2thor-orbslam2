@@ -1,5 +1,6 @@
 FROM ai2thor-docker:latest
 
+RUN rm /app/example_agent.py /app/install_nvidia.sh /app/requirements.txt
 RUN apt update
 
 RUN apt install libgl1-mesa-dev libglew-dev cmake && \
@@ -36,5 +37,4 @@ RUN git clone https://github.com/apoorvkh/ORB_SLAM2.git && cd ORB_SLAM2 && \
 ENV PYTHONPATH "/app/ORB_SLAM2:/app/ai2thor_docker:${PYTHONPATH}"
 
 COPY ai2thor_orbslam2.py /app
-COPY example_agent.py /app
-COPY dijkstra.py /app
+COPY demo /app/demo/

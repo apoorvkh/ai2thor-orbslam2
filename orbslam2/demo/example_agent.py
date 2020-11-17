@@ -6,31 +6,30 @@ from ai2thor_docker.x_server import startx
 from ai2thor_orbslam2 import ORBSLAM2Controller
 
 
-startx()
-
-gridSize = 0.05
-rotateStepDegrees = 2.0
-controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', '/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
-
-def dist(p1, p2):
-    return ((p1['x'] - p2['x']) ** 2 + (p1['z'] - p2['z']) ** 2) ** 0.5
+def dist(src, dst):
+    del_x, del_z = (dst['x'] - src['x'], dst['z'] - src['z'])
+    return math.sqrt(math.pow(del_x, 2) + math.pow(del_z, 2))
 
 def get_rot(src, dst):
-    del_x = dst['x'] - src['x']
-    del_z = dst['z'] - src['z']
+    del_x, del_z = (dst['x'] - src['x'], dst['z'] - src['z'])
     if del_z > 0:
-        if del_x > 0:
-            return math.degrees(math.atan(del_z / del_x))
-        elif del_x < 0:
-            return math.degrees(math.pi - math.atan(del_z / del_x))
-        return 90.0
+        if del_x == 0:
+            theta = math.pi / 2
+        else:
+            theta = math.atan(del_z / del_x)
+            if del_x < 0:
+                theta = math.pi - theta
     elif del_z < 0:
-        if del_x < 0:
-            return math.degrees(3/2 * math.pi - math.atan(del_x / del_z))
-        elif del_x > 0:
-            return math.degrees(2 * math.pi - math.atan(del_x / del_z))
-        return 270.0
-    return 180.0 if del_x < 0 else 0.0
+        if del_x == 0:
+            theta = 3/2 * math.pi
+        else:
+            theta = math.atan(del_x / del_z)
+            theta = (2 if del_x > 0 else 3/2) * math.pi - theta
+    elif del_x < 0:
+        theta = math.pi
+    else:
+        theta = 0.0
+    return math.degrees(theta)
 
 def goto(src, src_rot, dst):
     rot_to_dst = src_rot - get_rot(src, dst)
@@ -101,8 +100,14 @@ def random_shortest_path(controller):
     follow_path(src, src_rot, path[: int(0.5 * len(path)) ])
 
 
-random_walk(controller)
+if __name__ == '__main__':
+    startx()
 
-controller.stop('keyframes.txt', 'orbslam_traj.png')
+    gridSize = 0.05
+    rotateStepDegrees = 2.0
+    controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', '/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
 
-print('FPS', controller.fps())
+    random_shortest_path(controller)
+
+    controller.stop('keyframes.txt', 'orbslam_traj.png')
+    print('FPS: %.2f' % controller.fps())

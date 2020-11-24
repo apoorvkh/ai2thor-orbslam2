@@ -13,28 +13,17 @@ def dist(src, dst):
 
 def get_rot(src, dst):
     del_x, del_z = (dst['x'] - src['x'], dst['z'] - src['z'])
-    if del_z > 0:
-        if del_x == 0:
-            theta = math.pi / 2
-        else:
-            theta = math.atan(del_z / del_x)
-            if del_x < 0:
-                theta = math.pi - theta
-    elif del_z < 0:
-        if del_x == 0:
-            theta = 3/2 * math.pi
-        else:
-            theta = math.atan(del_x / del_z)
-            theta = (2 if del_x > 0 else 3/2) * math.pi - theta
-    elif del_x < 0:
-        theta = math.pi
+    if del_x == 0:
+        theta = (3/2 if del_z <= 0 else 1/2) * math.pi
+    elif del_z == 0:
+        theta = math.pi if del_x <= 0 else 0
     else:
-        theta = 0.0
+        theta = math.atan(del_z / del_x) + (math.pi if del_x < 0 else 0)
     return math.degrees(theta)
 
 def goto(src, src_rot, dst):
     rot_to_dst = src_rot - get_rot(src, dst)
-    rotate_action = 'RotateRight' if rot_to_dst >= 0 else 'RotateLeft'
+    rotate_action = 'Rotate' + ('Right' if rot_to_dst >= 0 else 'Left')
     rot_to_dst = abs(rot_to_dst)
     while rot_to_dst > 0:
         del_r = min(rot_to_dst, rotateStepDegrees)
@@ -54,7 +43,7 @@ def follow_path(src, src_rot, path):
         src_rot = event.metadata['agent']['rotation']['y']
     return event
 
-def random_walk(controller):
+def random_walk(controller, limit=None):
     event = controller.step(action='GetReachablePositions')
     reachable_positions = event.metadata['actionReturn']
     src = event.metadata['agent']['position']
@@ -80,6 +69,9 @@ def random_walk(controller):
             path = dijkstra.shortest_path(graph, src_index, dst_index)
     path = [reachable_positions[i] for i in path]
 
+    if limit is not None:
+        path = path[:limit]
+
     follow_path(src, src_rot, path)
 
 def random_shortest_path(controller):
@@ -98,7 +90,7 @@ def random_shortest_path(controller):
 
     path = controller.step(action="GetShortestPathToPoint", position=src, x=dst['x'], y=dst['y'], z=dst['z']).metadata['actionReturn']['corners']
 
-    follow_path(src, src_rot, path[: int(0.5 * len(path)) ])
+    follow_path(src, src_rot, path[: int(0.2 * len(path))])
 
 
 if __name__ == '__main__':
@@ -106,10 +98,16 @@ if __name__ == '__main__':
 
     device = torch.device('cuda')
     gridSize = 0.05
-    rotateStepDegrees = 2.0
-    controller = GradslamController(device, scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
+    rotateStepDegrees = 4.0
+    controller = GradslamController(device=device, store_pointclouds=True,
+                                    scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
 
-    random_shortest_path(controller)
+    random_walk(controller, limit=2)
 
     controller.stop()
     print('FPS: %.2f' % controller.fps())
+
+    controller.vis_gt_trajectory('gt.png')
+    controller.vis_slam_trajectory('slam.png')
+    controller.vis_pointcloud('pc.html')
+    controller.vis_all_pointclouds('pcs.html')

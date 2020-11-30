@@ -14,13 +14,13 @@ def get_intrinsics(event):
     w, h = event.metadata['screenWidth'], event.metadata['screenHeight']
     fov = event.metadata['fov']
     intrinsics = torch.eye(4)
-    intrinsics[0, 0] = w / math.tan(math.radians(fov / 2))  # f_x
-    intrinsics[1, 1] = h / math.tan(math.radians(fov / 2))  # f_y
+    intrinsics[0, 0] = w / (2 * math.tan(math.radians(fov / 2)))  # f_x
+    intrinsics[1, 1] = h / (2 * math.tan(math.radians(fov / 2)))  # f_y
     intrinsics[0, 2] = w / 2  # c_x
     intrinsics[1, 2] = h / 2  # c_y
     return intrinsics
 
-# From pytorch3d.transforms (see related documentation)
+# Modified from pytorch3d.transforms
 def euler_angles_to_matrix(euler_angles, convention):
 
     def _axis_angle_rotation(axis, angle):
@@ -38,17 +38,21 @@ def euler_angles_to_matrix(euler_angles, convention):
 
     matrices = map(_axis_angle_rotation, convention, torch.unbind(euler_angles, -1))
     return functools.reduce(torch.matmul, matrices)
+##
 
 def init_pose(event):
     pose = torch.eye(4)
-    pose[0, 3] = event.metadata['agent']['position']['x']
-    pose[1, 3] = event.metadata['agent']['position']['y']
-    pose[2, 3] = event.metadata['agent']['position']['z']
-    angles = [event.metadata['agent']['rotation']['z'],
-              event.metadata['agent']['rotation']['y'],
-              event.metadata['agent']['rotation']['x']]
-    angles = torch.deg2rad(torch.tensor(angles))
-    pose[:3, :3] = euler_angles_to_matrix(angles, 'ZYX')
+    pose[:3, 3] = torch.tensor([
+        event.metadata['agent']['position']['x'],
+        event.metadata['agent']['position']['y'],
+        event.metadata['agent']['position']['z'],
+    ])
+    angles = torch.tensor([
+        event.metadata['agent']['rotation']['z'],
+        event.metadata['agent']['rotation']['y'],
+        event.metadata['agent']['rotation']['x']
+    ])
+    pose[:3, :3] = euler_angles_to_matrix(torch.deg2rad(angles), 'ZYX')
     return pose
 
 def to_rgbd(frame, depth_frame, intrinsics, poses, device=None):
@@ -94,7 +98,15 @@ class GradslamController(Controller):
             pose = init_pose(event).view(1, 1, 4, 4) if self.prev_frame is None else None
             self.live_frame = to_rgbd(event.frame, event.depth_frame, intrinsics, pose, device=self.device)
 
-            self.pointcloud, self.live_frame.poses = self.slam.step(self.pointcloud, self.live_frame, self.prev_frame)
+            # self.pointcloud, self.live_frame.poses = self.slam.step(self.pointcloud, self.live_frame, self.prev_frame)
+
+            # Compensation for poor SLAM handling of in-place rotations
+            if(kwargs['action'].startswith('Rotate')) and self.prev_frame is not None:
+                _, self.live_frame.poses = self.slam.step(self.pointcloud, self.live_frame, self.prev_frame)
+                self.live_frame.poses[0, 0, :3, 3] = self.prev_frame.poses[0, 0, :3, 3]
+                self.pointcloud, _ = self.slam.step(self.pointcloud, self.live_frame, None)
+            else:
+                self.pointcloud, self.live_frame.poses = self.slam.step(self.pointcloud, self.live_frame, self.prev_frame)
 
             if self.store_pointclouds is not None:
                 self.pointclouds.append(self.pointcloud[0].cpu().plotly(0, as_figure=False, max_num_points=self.max_pc_points))
@@ -115,21 +127,21 @@ class GradslamController(Controller):
         # slam trajectory
         poses = torch.stack(self.poses)
         plt.scatter(poses[:, 0, 3], poses[:, 2, 3])  # x, z
-
         plt.savefig(file)
 
     def vis_pointcloud(self, file):
         with open(file, 'w') as out:
-            # poses = torch.stack(self.poses).numpy()
-            # intrinsics = self.intrinsics.numpy()
-            # trajectory_frustum = vis.plotly_poses(poses, intrinsics)[-1]
+            poses = torch.stack(self.poses).numpy()
+            intrinsics = self.intrinsics.numpy()
+            trajectory_frustum = vis.plotly_poses(poses, intrinsics)[-1]
             fig = self.pointcloud.plotly(0, max_num_points=self.max_pc_points)
-            # fig.add_traces(trajectory_frustum)
+            fig.add_traces(trajectory_frustum)
             out.write(fig.to_html())
 
     def vis_all_pointclouds(self, file):
-        with open(file, 'w') as out:
-            poses = torch.stack(self.poses).numpy()
-            intrinsics = self.intrinsics.numpy()
-            fig = vis.pointcloud_updates(self.pointclouds, poses, intrinsics)
-            out.write(fig.to_html())
+        if self.store_pointclouds:
+            with open(file, 'w') as out:
+                poses = torch.stack(self.poses).numpy()
+                intrinsics = self.intrinsics.numpy()
+                fig = vis.pointcloud_updates(self.pointclouds, poses, intrinsics)
+                out.write(fig.to_html())

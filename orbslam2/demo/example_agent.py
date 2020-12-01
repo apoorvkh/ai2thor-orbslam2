@@ -12,48 +12,47 @@ def dist(src, dst):
 
 def get_rot(src, dst):
     del_x, del_z = (dst['x'] - src['x'], dst['z'] - src['z'])
-    if del_z > 0:
-        if del_x == 0:
-            theta = math.pi / 2
-        else:
-            theta = math.atan(del_z / del_x)
-            if del_x < 0:
-                theta = math.pi - theta
-    elif del_z < 0:
-        if del_x == 0:
-            theta = 3/2 * math.pi
-        else:
-            theta = math.atan(del_x / del_z)
-            theta = (2 if del_x > 0 else 3/2) * math.pi - theta
-    elif del_x < 0:
-        theta = math.pi
+    if del_x == 0:
+        theta = (3/2 if del_z <= 0 else 1/2) * math.pi
+    elif del_z == 0:
+        theta = math.pi if del_x <= 0 else 0
     else:
-        theta = 0.0
+        theta = math.atan(del_z / del_x) + (math.pi if del_x < 0 else 0)
     return math.degrees(theta)
 
-def goto(src, src_rot, dst):
-    rot_to_dst = src_rot - get_rot(src, dst)
-    rotate_action = 'RotateRight' if rot_to_dst >= 0 else 'RotateLeft'
-    rot_to_dst = abs(rot_to_dst)
-    while rot_to_dst > 0:
-        del_r = min(rot_to_dst, rotateStepDegrees)
-        event = controller.step(action=rotate_action, degrees=del_r)
-        rot_to_dst -= del_r
-    dist_to_dst = dist(src, dst)
-    while dist_to_dst > 0:
-        d_m = min(dist_to_dst, gridSize)
-        event = controller.step(action='MoveAhead', moveMagnitude=d_m)
-        dist_to_dst -= d_m
+def straight_line(controller, distance, step_size):
+    for _ in range(int(distance // step_size)):
+        event = controller.step(action='MoveAhead', moveMagnitude=step_size)
+    rem_dist = distance % step_size
+    if rem_dist > 0:
+        event = controller.step(action='MoveAhead', moveMagnitude=rem_dist)
     return event
 
-def follow_path(src, src_rot, path):
+def rotate(controller, degrees, theta):
+    rotate_action = 'Rotate' + ('Right' if degrees >= 0 else 'Left')
+    for _ in range(int(degrees // theta)):
+        event = controller.step(action=rotate_action, degrees=theta)
+    rem_degrees = degrees % theta
+    if rem_degrees > 0:
+        event = controller.step(action=rotate_action, degrees=rem_degrees)
+    return event
+
+def follow_path(controller, src_pos, src_rot, path):
+    cur_pos, cur_rot = src_pos, src_rot
+    rotateStepDegrees = controller.initialization_parameters['rotateStepDegrees']
+    gridSize = controller.initialization_parameters['gridSize']
     for p in path:
-        event = goto(src, src_rot, p)
-        src = event.metadata['agent']['position']
-        src_rot = event.metadata['agent']['rotation']['y']
+        d_rot = cur_rot - get_rot(cur_pos, p)
+        d_pos = dist(cur_pos, p)
+        if d_rot > 0:
+            event = rotate(controller, d_rot, rotateStepDegrees)
+            cur_rot = event.metadata['agent']['rotation']['y']
+        if d_pos > 0:
+            event = straight_line(controller, d_pos, gridSize)
+            cur_pos = event.metadata['agent']['position']
     return event
 
-def random_walk(controller):
+def random_walk(controller, limit=None):
     event = controller.step(action='GetReachablePositions')
     reachable_positions = event.metadata['actionReturn']
     src = event.metadata['agent']['position']
@@ -79,7 +78,10 @@ def random_walk(controller):
             path = dijkstra.shortest_path(graph, src_index, dst_index)
     path = [reachable_positions[i] for i in path]
 
-    follow_path(src, src_rot, path)
+    if limit is not None:
+        path = path[:limit]
+
+    follow_path(controller, src, src_rot, path)
 
 def random_shortest_path(controller):
     event = controller.step(action='GetReachablePositions')
@@ -97,7 +99,7 @@ def random_shortest_path(controller):
 
     path = controller.step(action="GetShortestPathToPoint", position=src, x=dst['x'], y=dst['y'], z=dst['z']).metadata['actionReturn']['corners']
 
-    follow_path(src, src_rot, path[: int(0.5 * len(path)) ])
+    follow_path(controller, src, src_rot, path)
 
 
 if __name__ == '__main__':
@@ -105,9 +107,12 @@ if __name__ == '__main__':
 
     gridSize = 0.05
     rotateStepDegrees = 2.0
-    controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', '/app/ORB_SLAM2/Examples/Monocular/TUM3.yaml', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
+    controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
 
-    random_shortest_path(controller)
+    for _ in range(4):
+        straight_line(controller, 0.5, gridSize)
+        rotate(controller, 90.0, rotateStepDegrees)
 
-    controller.stop('keyframes.txt', 'orbslam_traj.png')
+    controller.stop()
     print('FPS: %.2f' % controller.fps())
+    controller.vis_trajectory('trajectory.png')

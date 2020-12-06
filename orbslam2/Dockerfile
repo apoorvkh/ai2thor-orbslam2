@@ -37,4 +37,4 @@ RUN git clone https://github.com/apoorvkh/ORB_SLAM2.git && cd ORB_SLAM2 && \
     python3 setup.py build_ext --inplace && \
     cd /app
 
-ENV PYTHONPATH "/app/ORB_SLAM2:/app/ai2thor_docker:${PYTHONPATH}"
+ENV PYTHONPATH "/app/ORB_SLAM2:/app:${PYTHONPATH}"

@@ -1,28 +1,51 @@
 import os
-import tempfile
-import yaml
 import math
 from time import time
-from ai2thor.controller import Controller
-import orbslam2
+import functools
+import yaml
+import tempfile
+import numpy as np
 import matplotlib.pyplot as plt
+import orbslam2
+from ai2thor.controller import Controller
 
-## redo in numpy
-# def init_pose(event):
-#     pose = torch.eye(4)
-#     pose[:3, 3] = torch.tensor([
-#         event.metadata['agent']['position']['x'],
-#         event.metadata['agent']['position']['y'],
-#         event.metadata['agent']['position']['z'],
-#     ])
-#     angles = torch.tensor([
-#         event.metadata['agent']['rotation']['z'],
-#         event.metadata['agent']['rotation']['y'],
-#         event.metadata['agent']['rotation']['x']
-#     ])
-#     pose[:3, :3] = euler_angles_to_matrix(torch.deg2rad(angles), 'ZYX')
-#     return pose
+# Modified from pytorch3d.transforms
+def euler_angles_to_matrix(euler_angles, convention):
 
+    def _axis_angle_rotation(axis, angle):
+        cos = np.cos(angle)
+        sin = np.sin(angle)
+        one = np.ones_like(angle)
+        zero = np.zeros_like(angle)
+        if axis == "X":
+            R_flat = (one, zero, zero, zero, cos, -sin, zero, sin, cos)
+        if axis == "Y":
+            R_flat = (cos, zero, sin, zero, one, zero, -sin, zero, cos)
+        if axis == "Z":
+            R_flat = (cos, -sin, zero, sin, cos, zero, zero, zero, one)
+        return np.stack(R_flat, -1).reshape(angle.shape + (3, 3))
+
+    matrices = map(_axis_angle_rotation, convention, euler_angles)
+    return functools.reduce(np.matmul, matrices)
+##
+
+def init_pose(event):
+    pose = np.eye(4, dtype=np.float32)
+    pose[:3, 3] = np.array([
+        event.metadata['agent']['position']['x'],
+        event.metadata['agent']['position']['y'],
+        event.metadata['agent']['position']['z'],
+    ])
+    angles = np.array([
+        event.metadata['agent']['rotation']['z'],
+        event.metadata['agent']['rotation']['y'],
+        event.metadata['agent']['rotation']['x']
+    ])
+    pose[:3, :3] = euler_angles_to_matrix(np.deg2rad(angles), 'ZYX')
+    return pose
+
+# check Camera.fps, Camera.bf, ThDepth, DepthMapFactor
+# parameterize ORBextractor
 def init_settings(event):
     w, h = event.metadata['screenWidth'], event.metadata['screenHeight']
     fov = event.metadata['fov']
@@ -41,12 +64,13 @@ def init_settings(event):
         'Viewer.ViewpointX': 0, 'Viewer.ViewpointY': -0.7, 'Viewer.ViewpointZ': -1.8, 'Viewer.ViewpointF': 500
     }
 
-def init_slam(vocab_file, event):
+def init_slam(controller, vocab_file):
+    event = controller.step(action='Pass')
     _, settings_file = tempfile.mkstemp()
     with open(settings_file, 'w') as file:
         file.write('%YAML:1.0')
         file.write(yaml.dump(init_settings(event)))
-    slam_system = orbslam2.SLAM(vocab_file, settings_file, 'rgbd')
+    slam_system = orbslam2.SLAM(vocab_file, settings_file, 'rgbd', init_pose(event), True)
     os.remove(settings_file)
     return slam_system
 
@@ -57,8 +81,10 @@ class ORBSLAM2Controller(Controller):
         self.controller_init = True
 
         self.vocab_file = vocab_file
-        self.slam_system = None
+        self.slam_system = init_slam(super(), self.vocab_file)
+
         self.gt_trajectory = {'x' : [], 'z' : []}
+        self.slam_trajectory = {'x' : [], 'z' : []}
 
         self.frame_counter = 0
         self.time_elapsed = 0.0
@@ -71,10 +97,10 @@ class ORBSLAM2Controller(Controller):
             self.gt_trajectory['x'].append(event.metadata['agent']['position']['x'])
             self.gt_trajectory['z'].append(event.metadata['agent']['position']['z'])
 
-            if self.slam_system is None:
-                self.slam_system = init_slam(self.vocab_file, event)
-
             pose = self.slam_system.track(event.frame, event.depth_frame)
+
+            self.slam_trajectory['x'].append(pose[0, 3])
+            self.slam_trajectory['z'].append(pose[2, 3])
 
             self.frame_counter += 1
             self.time_elapsed += time() - start
@@ -86,19 +112,8 @@ class ORBSLAM2Controller(Controller):
         self.slam_system.shutdown()
 
     def vis_trajectory(self, file):
-        # plt.scatter(self.gt_trajectory['x'], self.gt_trajectory['z'])
-
-        _, keyframe_file = tempfile.mkstemp()
-        self.slam_system.save_keyframe_trajectory(keyframe_file)
-        with open(keyframe_file, 'r') as rf:
-            keyframes = rf.readlines()
-            keyframes = list(zip(*[kf.split()[1:4] for kf in keyframes]))
-            kf_x = list(map(float, keyframes[0]))
-            kf_z = list(map(float, keyframes[2]))
-        os.remove(keyframe_file)
-
-        plt.scatter(kf_x, kf_z)
-
+        plt.scatter(self.gt_trajectory['x'], self.gt_trajectory['z'])
+        plt.scatter(self.slam_trajectory['x'], self.slam_trajectory['z'])
         plt.savefig(file)
 
     def fps(self):

@@ -109,6 +109,7 @@ if __name__ == '__main__':
     rotateStepDegrees = 2.0
     controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
 
+    # square trajectory
     for _ in range(4):
         straight_line(controller, 0.5, gridSize)
         rotate(controller, 90.0, rotateStepDegrees)

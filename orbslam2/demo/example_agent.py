@@ -2,6 +2,7 @@ import random
 import math
 
 import dijkstra
+import ai2thor
 from ai2thor_docker.x_server import startx
 from ai2thor_orbslam2 import ORBSLAM2Controller
 
@@ -107,7 +108,7 @@ if __name__ == '__main__':
 
     gridSize = 0.05
     rotateStepDegrees = 2.0
-    controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.txt', scene='FloorPlan28', gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
+    controller = ORBSLAM2Controller('/app/ORB_SLAM2/Vocabulary/ORBvoc.bin', scene='FloorPlan28', server_class=ai2thor.fifo_server.FifoServer, gridSize=gridSize, snapToGrid=False, renderDepthImage=True)
 
     # square trajectory
     for _ in range(4):
@@ -116,4 +117,4 @@ if __name__ == '__main__':
 
     controller.stop()
     print('FPS: %.2f' % controller.fps())
-    controller.vis_trajectory('trajectory.png')
+    # controller.vis_trajectory('trajectory.png')

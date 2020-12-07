@@ -33,8 +33,7 @@ RUN pip3 install Cython && apt-get remove python3-apt && apt-get install python3
 ENV LD_LIBRARY_PATH "/app/ORB_SLAM2/lib:/usr/local/lib:${LD_LIBRARY_PATH}"
 
 RUN git clone https://github.com/apoorvkh/ORB_SLAM2.git && cd ORB_SLAM2 && \
-    chmod +x build.sh && ./build.sh && \
-    python3 setup.py build_ext --inplace && \
+    chmod +x build.sh build_python.sh && ./build.sh && ./build_python.sh && \
     cd /app
 
-ENV PYTHONPATH "/app/ORB_SLAM2:/app:${PYTHONPATH}"
+ENV PYTHONPATH "/app/ORB_SLAM2/lib:/app:${PYTHONPATH}"

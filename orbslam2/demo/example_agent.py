@@ -117,4 +117,4 @@ if __name__ == '__main__':
 
     controller.stop()
     print('FPS: %.2f' % controller.fps())
-    # controller.vis_trajectory('trajectory.png')
+    controller.vis_trajectory('trajectory.png')

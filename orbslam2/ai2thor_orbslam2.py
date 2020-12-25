@@ -11,6 +11,23 @@ import orbslam2
 from ai2thor.controller import Controller
 
 
+np.set_printoptions(suppress=True)
+
+def compute_pose(agent_position, agent_rotation):
+    pose = np.eye(4, dtype=np.float32)
+    pose[:3, 3] = np.array([agent_position[d] for d in 'xyz'])
+    pose[:3, :3] = euler_angles_to_matrix(np.deg2rad(
+        np.array([agent_rotation[d] for d in 'zyx'])
+    ), 'ZYX')
+    return pose
+
+def state_to_pose(agent_state):
+    agent_position = {k : agent_state[k] for k in 'xyz'}
+    agent_rotation = {k : agent_state['rotation'][k] for k in 'xyz'}
+    pose = compute_pose(agent_position, agent_rotation)
+    return pose
+
+
 # Modified from pytorch3d.transforms
 def euler_angles_to_matrix(euler_angles, convention):
 
@@ -79,8 +96,7 @@ class ORBSLAM2Controller(Controller):
         self.slam_system = None
         super().__init__(**kwargs)
 
-        self.vocab_file = vocab_file
-        self.slam_system = init_slam(super(), self.vocab_file, use_viewer)
+        self.slam_system = init_slam(super(), vocab_file, use_viewer)
 
         self.gt_trajectory = {'x' : [], 'z' : []}
         self.slam_trajectory = {'x' : [], 'z' : []}
@@ -96,7 +112,8 @@ class ORBSLAM2Controller(Controller):
             self.gt_trajectory['x'].append(event.metadata['agent']['position']['x'])
             self.gt_trajectory['z'].append(event.metadata['agent']['position']['z'])
 
-            pose, map_points = self.slam_system.track(event.frame, event.depth_frame)
+            self.slam_system.track(event.frame, event.depth_frame)
+            pose = self.slam_system.get_world_pose()
 
             self.slam_trajectory['x'].append(pose[0, 3])
             self.slam_trajectory['z'].append(pose[2, 3])
